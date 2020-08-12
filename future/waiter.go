@@ -7,13 +7,13 @@ import (
 //Waiter provides events that waits and completed.
 type Waiter struct {
 	Event           condition.Event
-	FinishedFutures []*Futures
+	FinishedFutures []*Future
 }
 
 //InitWaiter Creates instance of waitier.
 func InitWaiter() *Waiter {
 	var w *Waiter
-	var futureList []*Futures
+	var futureList []*Future
 	w.Event = condition.Event{}
 	w.Event.InitEvent()
 	w.FinishedFutures = futureList
@@ -22,7 +22,7 @@ func InitWaiter() *Waiter {
 }
 
 // AddFutures to waiter with results, execptions or cancelled..
-func (w *Waiter) AddFutures(f *Futures) {
+func (w *Waiter) AddFutures(f *Future) {
 
 	w.FinishedFutures = append(w.FinishedFutures, f)
 }

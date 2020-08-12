@@ -74,7 +74,7 @@ func (c *Condition) Aquire(blocking bool) (bool, error) {
 			err = errors.New("Lock Already Aquired")
 
 		} else {
-			if channelVal.Block { // Channel is being used by someone
+			if channelVal.Block && !channelVal.Read { // Channel is being used by someone
 				channelVal.Waiters.Wait()
 			}
 			channelVal.Locked = true
@@ -89,7 +89,6 @@ func (c *Condition) Aquire(blocking bool) (bool, error) {
 			aquired = true
 		}
 	} else {
-		fmt.Println("aquire: ", blocking)
 		if channelVal.Block {
 			aquired = false
 		} else {

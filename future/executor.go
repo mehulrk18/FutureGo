@@ -1,40 +1,12 @@
 package future
 
-import (
-	"errors"
-	"fmt"
-)
+//Submit function
+func Submit(fun Fn) *Future {
+	var f *Future
+	f = new(Future)
+	*f = InitFuture(true)
 
-//TestFuture testing Future
-func TestFuture(f fn) Future {
-	fut := new(Future)
-	fut.InitFuture(true)
+	WorkItemInit(f, fun)
 
-	// True: read lock, False: write lock
-
-	for {
-		fmt.Println(" state: ", fut.GetState())
-		fut.AddDoneCallBack(f)
-
-		// fut.Cancel()
-
-		fmt.Println("Running: ", fut.SetRunningOrNotifyCancel())
-
-		fmt.Println(" state: ", fut.GetState())
-
-		fut.SetResult(5)
-		fut.SetExecption(errors.New("Some Exception"))
-
-		fut.InvokeCallBacks()
-		fut.GetResult()
-
-		if fut.GetState() == string(Finished) || fut.GetState() == string(Cancelled) || fut.GetState() == string(CancelledAndNotified) {
-			fmt.Println(" state: ", fut.GetState())
-			break
-		}
-
-	}
-
-	return *fut
-
+	return f
 }

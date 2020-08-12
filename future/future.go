@@ -9,7 +9,9 @@ import (
 
 // futureState enum type string
 type futureState string
-type fn func()
+
+//Fn Function for future to execute.
+type Fn func() int64 //x, y int64
 
 //
 const (
@@ -20,83 +22,62 @@ const (
 	Finished             futureState = "FINISHED"
 )
 
-//GenFun generic Function struct to bind variables together.
-type GenFun struct {
-	Fun fn
-}
-
-// Futures Struct for asyncronous computation
-type Futures struct {
+// Future Struct for asyncronous computation
+type Future struct {
 	Condition     condition.Condition
 	State         futureState
 	Exception     error
 	Result        int64
 	Waiters       []*Waiter
-	DoneCallbacks []fn
-}
-
-//Future is Future Channel
-type Future struct {
-	FutureChannel chan Futures
+	DoneCallbacks []Fn
 }
 
 //InitFuture initiaizefuture
-func (f *Future) InitFuture(read bool) {
-	f.FutureChannel = make(chan Futures)
+func InitFuture(read bool) Future {
+	var future Future
 	var w []*Waiter
-	var gf []fn
+	var gf []Fn
 	cond := new(condition.Condition)
 	cond.InitCondition(read)
-	go func() {
-		f.FutureChannel <- Futures{
-			Condition:     *cond,
-			State:         Pending,
-			Exception:     nil,
-			Result:        0,
-			Waiters:       w,
-			DoneCallbacks: gf,
-		}
-	}()
+	future = Future{
+		Condition:     *cond,
+		State:         Pending,
+		Exception:     nil,
+		Result:        0,
+		Waiters:       w,
+		DoneCallbacks: gf,
+	}
+	return future
 }
 
 //InvokeCallBacks Execute callbacks
 func (f *Future) InvokeCallBacks() {
-	futureChan := <-f.FutureChannel
-	for i := range futureChan.DoneCallbacks {
-		futureChan.DoneCallbacks[i]()
+	for i := range f.DoneCallbacks {
+		f.DoneCallbacks[i]() // FIX THIS
 	}
-	go func() {
-		f.FutureChannel <- futureChan
-	}()
 }
 
 //GetState returns state of future
 func (f *Future) GetState() string {
-	futureChan := <-f.FutureChannel
-	state := futureChan.State
-
-	go func() {
-		f.FutureChannel <- futureChan
-	}()
+	state := f.State
 	return string(state)
 }
 
 //Cancel the future if possible
 func (f *Future) Cancel() bool {
-	futureChan := <-f.FutureChannel
 	response := true
-	lock, err := futureChan.Condition.Aquire(true)
+	lock, err := f.Condition.Aquire(true)
 
 	if lock && err == nil {
-		if futureChan.State == Running || futureChan.State == Finished {
+		if f.State == Finished {
 			response = false
-			futureChan.Condition.Release()
-		} else if futureChan.State == Cancelled || futureChan.State == CancelledAndNotified {
+			f.Condition.Release()
+		} else if f.State == Cancelled || f.State == CancelledAndNotified {
 			response = true
-			futureChan.Condition.Release()
+			f.Condition.Release()
 		} else {
-			futureChan.State = Cancelled
-			err = futureChan.Condition.NotifyAll()
+			f.State = Cancelled
+			err = f.Condition.NotifyAll()
 		}
 	}
 
@@ -104,20 +85,16 @@ func (f *Future) Cancel() bool {
 		fmt.Println("Error while cancelling: ", err)
 		response = false
 	}
-	go func() {
-		f.FutureChannel <- futureChan
-	}()
 	return response
 }
 
 //IsCancelled returns true if future Cancelled.
 func (f *Future) IsCancelled() bool {
-	futureChan := <-f.FutureChannel
 	response := false
-	lock, err := futureChan.Condition.Aquire(true)
+	lock, err := f.Condition.Aquire(true)
 
 	if lock && err == nil {
-		if futureChan.State == Cancelled || futureChan.State == CancelledAndNotified {
+		if f.State == Cancelled || f.State == CancelledAndNotified {
 			response = true
 		}
 	}
@@ -125,23 +102,19 @@ func (f *Future) IsCancelled() bool {
 	if err != nil {
 		fmt.Println("Some error occured: ", err)
 	}
-	futureChan.Condition.Release()
-	go func() {
-		f.FutureChannel <- futureChan
-	}()
+	f.Condition.Release()
 
 	return response
 }
 
 //IsRunning checks whether the future is running or not.
 func (f *Future) IsRunning() bool {
-	futureChan := <-f.FutureChannel
 	response := false
 
-	lock, err := futureChan.Condition.Aquire(true)
+	lock, err := f.Condition.Aquire(true)
 
 	if lock && err == nil {
-		if futureChan.State == Running {
+		if f.State == Running {
 			response = true
 		}
 	}
@@ -149,23 +122,19 @@ func (f *Future) IsRunning() bool {
 	if err != nil {
 		fmt.Println("Some error occured: ", err)
 	}
-	futureChan.Condition.Release()
-	go func() {
-		f.FutureChannel <- futureChan
-	}()
+	f.Condition.Release()
 
 	return response
 }
 
 //IsDone checks whether the future is cancelled or finished executing.
 func (f *Future) IsDone() bool {
-	futureChan := <-f.FutureChannel
 	response := false
 
-	lock, err := futureChan.Condition.Aquire(true)
+	lock, err := f.Condition.Aquire(true)
 
 	if lock && err == nil {
-		if futureChan.State == Finished || futureChan.State == Cancelled || futureChan.State == CancelledAndNotified {
+		if f.State == Finished || f.State == Cancelled || f.State == CancelledAndNotified {
 			response = true
 		}
 	}
@@ -173,36 +142,29 @@ func (f *Future) IsDone() bool {
 	if err != nil {
 		fmt.Println("Some error occured: ", err)
 	}
-	futureChan.Condition.Release()
-	go func() {
-		f.FutureChannel <- futureChan
-	}()
+	f.Condition.Release()
 
 	return response
 }
 
 //GetResult Returns result or execption
 func (f *Future) GetResult() (int64, error) {
-	futureChan := <-f.FutureChannel
-	result := futureChan.Result
-	err := futureChan.Exception
+	result := f.Result //f.Result
+	err := f.Exception //f.Exception
 
-	go func() {
-		f.FutureChannel <- futureChan
-	}()
-
-	return result, err
+	if err != nil {
+		return 0, err
+	}
+	return result, nil
 }
 
 //AddDoneCallBack adds callback to done call backs which will run when future finishes.
-func (f *Future) AddDoneCallBack(fun fn) {
-	futureChan := <-f.FutureChannel
-
-	lock, err := futureChan.Condition.Aquire(true)
+func (f *Future) AddDoneCallBack(fun Fn) {
+	lock, err := f.Condition.Aquire(true)
 
 	if lock && err == nil {
-		if futureChan.State != Finished && futureChan.State != Cancelled && futureChan.State != CancelledAndNotified {
-			futureChan.DoneCallbacks = append(futureChan.DoneCallbacks, fun)
+		if f.State != Finished && f.State != Cancelled && f.State != CancelledAndNotified {
+			f.DoneCallbacks = append(f.DoneCallbacks, fun)
 		}
 	} else {
 		fun()
@@ -210,157 +172,129 @@ func (f *Future) AddDoneCallBack(fun fn) {
 			fmt.Println("Some error callback: ", err)
 		}
 	}
-	futureChan.Condition.Release()
-	go func() {
-		f.FutureChannel <- futureChan
-	}()
+	f.Condition.Release()
 }
 
 //FinalResult gets result of callback that future represents.
 func (f *Future) FinalResult(timeout uint32) (int64, error) {
-	futureChan := <-f.FutureChannel
 	result := int64(0)
 	var err error
 
-	lock, err := futureChan.Condition.Aquire(true)
+	lock, err := f.Condition.Aquire(true)
 
 	if lock && err == nil {
-		if futureChan.State == CancelledAndNotified || futureChan.State == Cancelled {
+		if f.State == CancelledAndNotified || f.State == Cancelled {
 			err = errors.New("Process was Cancelled")
-		} else if futureChan.State == Finished {
+		} else if f.State == Finished {
 			result, err = f.GetResult()
 		} else {
-			futureChan.Condition.Wait(timeout)
-			if futureChan.State == CancelledAndNotified || futureChan.State == Cancelled {
+			f.Condition.Wait(timeout)
+			if f.State == CancelledAndNotified || f.State == Cancelled {
 				err = errors.New("Process was Cancelled")
-			} else if futureChan.State == Finished {
+			} else if f.State == Finished {
 				result, err = f.GetResult()
 			} else {
 				err = errors.New("Future Condition Timedout")
 			}
 		}
 	}
-	futureChan.Condition.Release()
-
-	go func() {
-		f.FutureChannel <- futureChan
-	}()
-
+	f.Condition.Release()
 	return result, err
 }
 
 //GetException returns exception of the future
 func (f *Future) GetException(timeout uint32) error {
-	futureChan := <-f.FutureChannel
-
-	lock, err := futureChan.Condition.Aquire(true)
+	lock, err := f.Condition.Aquire(true)
 
 	if lock && err == nil {
-		if futureChan.State == CancelledAndNotified || futureChan.State == Cancelled {
+		if f.State == CancelledAndNotified || f.State == Cancelled {
 			err = errors.New("Process was Cancelled")
-		} else if futureChan.State == Finished {
-			err = futureChan.Exception
+		} else if f.State == Finished {
+			err = f.Exception
 		} else {
-			futureChan.Condition.Wait(timeout)
-			if futureChan.State == CancelledAndNotified || futureChan.State == Cancelled {
+			f.Condition.Wait(timeout)
+			if f.State == CancelledAndNotified || f.State == Cancelled {
 				err = errors.New("Process was Cancelled")
-			} else if futureChan.State == Finished {
-				err = futureChan.Exception
+			} else if f.State == Finished {
+				err = f.Exception
 			} else {
 				err = errors.New("Future Condition Timedout")
 			}
 		}
 	}
-	futureChan.Condition.Release()
-	go func() {
-		f.FutureChannel <- futureChan
-	}()
-
+	f.Condition.Release()
 	return err
 }
 
 //SetRunningOrNotifyCancel mark future as running or process any cancel notification.
 func (f *Future) SetRunningOrNotifyCancel() bool {
-	futureChan := <-f.FutureChannel
-
-	lock, err := futureChan.Condition.Aquire(true)
+	lock, err := f.Condition.Aquire(true)
 	response := true
 	if lock && err == nil {
-		if futureChan.State == Cancelled {
-			futureChan.State = CancelledAndNotified
+		if f.State == Cancelled {
+			f.State = CancelledAndNotified
 			// Add cancelled future to the waiters
-			for _, w := range futureChan.Waiters {
-				w.AddFutures(&futureChan)
+			for _, w := range f.Waiters {
+				w.AddFutures(f)
 			}
 
 			response = false
-		} else if futureChan.State == Pending {
-			futureChan.State = Running
+		} else if f.State == Pending {
+			f.State = Running
 		} else {
 			err := errors.New("Future in unexpected state: ")
-			fmt.Println(err, futureChan.State)
+			fmt.Println(err, f.State)
 			response = false
 		}
 	}
-	futureChan.Condition.Release()
-	go func() {
-		f.FutureChannel <- futureChan
-	}()
-
+	f.Condition.Release()
 	return response
 }
 
 //SetResult mark future as running or process any cancel notification.
 func (f *Future) SetResult(result int64) error {
-	futureChan := <-f.FutureChannel
-
-	lock, err := futureChan.Condition.Aquire(true)
+	lock, err := f.Condition.Aquire(true)
 
 	if lock && err == nil {
-		if futureChan.State == Cancelled || futureChan.State == CancelledAndNotified || futureChan.State == Finished {
-			err = fmt.Errorf("Invalid Result State: %s", futureChan.State)
-			futureChan.Condition.Release()
+		if f.State == Cancelled || f.State == CancelledAndNotified || f.State == Finished {
+			err = fmt.Errorf("Cannot Set Result process was %s ", f.State)
+			f.Condition.Release()
 		} else {
-			futureChan.Result = result
-			futureChan.State = Finished
+			f.Result = result
+			f.State = Finished
 			// Adding Completed futures
-			for _, w := range futureChan.Waiters {
-				w.AddFutures(&futureChan)
+			for _, w := range f.Waiters {
+				w.AddFutures(f)
 			}
-			err = futureChan.Condition.NotifyAll()
+			err = f.Condition.NotifyAll()
 		}
 	}
-	go func() {
-		f.FutureChannel <- futureChan
-	}()
-	f.InvokeCallBacks()
+	if err == nil {
+		f.InvokeCallBacks()
+	}
 	return err
 }
 
 //SetExecption sets expection for the Future
 func (f *Future) SetExecption(exception error) error {
-	futureChan := <-f.FutureChannel
-
-	lock, err := futureChan.Condition.Aquire(true)
+	lock, err := f.Condition.Aquire(true)
 
 	if lock && err == nil {
-		if futureChan.State == Cancelled || futureChan.State == CancelledAndNotified || futureChan.State == Finished {
-			err = fmt.Errorf("Invalid Result State: %s", futureChan.State)
+		if f.State == Cancelled || f.State == CancelledAndNotified || f.State == Finished {
+			err = fmt.Errorf("Invalid Result State to set execption: %s", f.State)
 
 		} else {
-			futureChan.Exception = exception
-			futureChan.State = Finished
+			f.Exception = exception
+			f.State = Finished
 			// Adding futures with execptions
-			for _, w := range futureChan.Waiters {
-				w.AddFutures(&futureChan)
+			for _, w := range f.Waiters {
+				w.AddFutures(f)
 			}
-			err = futureChan.Condition.NotifyAll()
+			err = f.Condition.NotifyAll()
 		}
 	}
-	go func() {
-		f.FutureChannel <- futureChan
-	}()
-	f.InvokeCallBacks()
-
+	if err == nil {
+		f.InvokeCallBacks()
+	}
 	return err
 }
