@@ -46,7 +46,10 @@ func main() {
 		f = future.Submit(fun)
 		res, e := f.GetResult()
 		// res, e := f.FinalResult(2)
-		fmt.Println("Future result: ", res)
-		fmt.Println("Error in future: ", e)
+		if e == nil {
+			fmt.Println("Future result: ", res)
+		} else {
+			fmt.Println("Error in future: ", e)
+		}
 	}
 }
